@@ -94,44 +94,43 @@ def backward_static(x, A, O, L, D, A_start):
 
 @jit(nopython=True)
 def unsupervised_static(x, M, alphas, betas, O, A, O_num, O_den, A_num, A_den, L, D):
-    if M!=1:
-        for a in range(L):
-            for b in range(L):
-                for i in range(M - 1):
-                    P1_num = alphas[i][a] * A[a][b] * O[b][x[i + 1]] * betas[i + 1][b] 
+    for a in range(L):
+        for b in range(L):
+            for i in range(M - 1):
+                P1_num = alphas[i][a] * A[a][b] * O[b][x[i + 1]] * betas[i + 1][b] 
 
-                    P1_den = 0
-                    for aprime in range(L):
-                        for bprime in range(L):
-                            P1_den += alphas[i][aprime] * A[aprime][bprime] * O[bprime][x[i + 1]] * betas[i + 1][bprime]
+                P1_den = 0
+                for aprime in range(L):
+                    for bprime in range(L):
+                        P1_den += alphas[i][aprime] * A[aprime][bprime] * O[bprime][x[i + 1]] * betas[i + 1][bprime]
 
-                    P2_num = alphas[i][a] * betas[i][a]
-                    P2_den = 0
-                    for aprime in range(L):
-                        P2_den += alphas[i][aprime] * betas[i][aprime]      
+                P2_num = alphas[i][a] * betas[i][a]
+                P2_den = 0
+                for aprime in range(L):
+                    P2_den += alphas[i][aprime] * betas[i][aprime]      
 
-                    if P1_den != 0:
-                        A_num[a][b] += P1_num/P1_den
+                if P1_den != 0:
+                    A_num[a][b] += P1_num/P1_den
 
-                    if P2_den != 0:
-                        A_den[a][b] += P2_num/P2_den
+                if P2_den != 0:
+                    A_den[a][b] += P2_num/P2_den
 
-        for z in range(L):
-            for w in range(D):
-                for i in range(M):
+    for z in range(L):
+        for w in range(D):
+            for i in range(M):
 
-                    P3_num = alphas[i][z] * betas[i][z]
-                    P3_den = 0
-                    for zprime in range(L):
-                        P3_den += alphas[i][zprime] * betas[i][zprime]
-                    if P3_den != 0:
-                        P3 = P3_num/P3_den
-                    else:
-                        P3 = 0
+                P3_num = alphas[i][z] * betas[i][z]
+                P3_den = 0
+                for zprime in range(L):
+                    P3_den += alphas[i][zprime] * betas[i][zprime]
+                if P3_den != 0:
+                    P3 = P3_num/P3_den
+                else:
+                    P3 = 0
 
 
-                    O_num[z][w] += (x[i] == w) * P3
-                    O_den[z][w] += P3
+                O_num[z][w] += (x[i] == w) * P3
+                O_den[z][w] += P3
 
     return O_num, O_den, A_num, A_den
 
@@ -213,7 +212,7 @@ class HiddenMarkovModel:
         L = self.L #Number of states.
         D = self.D #Number of observations
         
-        #print('L (the number of states) = ' + str(L))
+        print('L (the number of states) = ' + str(L))
         
         A_start = self.A_start
         
@@ -428,12 +427,12 @@ class HiddenMarkovModel:
             A_den = np.zeros((L, L))
             O_num = np.zeros((L, D))
             O_den = np.zeros((L, D))
-            if N % 100 == 0:
+            if N % 10 == 0:
                 print('Iteration: ' + str(N) + '/' + str(N_iters))
             for g in range(len(X)): #each x[g] is a sequence
                 x = np.array(X[g])
-                #if g % 500 == 0:
-                    #print('Sequence: ' +  str(g) + '/' + str(len(X)))      
+                if g % 500 == 0:
+                    print('Sequence: ' +  str(g) + '/' + str(len(X)))      
                 M = len(x)
                 alphas = self.forward(x, normalize=True)[1:]
                 betas = self.backward(x, normalize=True)[1:]
@@ -485,6 +484,74 @@ class HiddenMarkovModel:
             emission.append(emiss)
         
         return emission, states
+    
+    def generate_emission2(self, stress_dict, unstress_dict, obs_map):
+        '''
+        '''
+        emission = []
+        states = []
+        
+        O = self.O
+        A = self.A
+        D = self.D
+        L = self.L
+        A_start = self.A_start
+        
+        stress_index = []
+        stress_keys = list(stress_dict.keys())
+        
+        unstress_index = []
+        unstress_keys = list(unstress_dict.keys())
+        
+        for i in range(len(stress_keys)):
+            stress_index.append(obs_map[stress_keys[i]])
+        
+        for j in range(len(unstress_keys)):
+            unstress_index.append(obs_map[unstress_keys[j]])
+        
+        inv_map = {v: k for k, v in obs_map.items()}
+        
+        counter = 0
+
+        emission0 = '0.001'
+        
+        while emission0 not in unstress_index:
+            state0 = np.random.choice(range(len(A_start)), 1, p=A_start)[0]
+            emission0 = np.random.choice(range(D), 1, p=O[state0])[0]
+        
+        states.append(state0)
+        emission.append(emission0)
+        
+        counter += len(unstress_dict[inv_map[emission0]])
+        
+        
+        while counter < 10:
+            state = np.random.choice(range(L), 1, p=A[states[-1]])[0]
+            emiss = np.random.choice(range(D), 1, p=O[state])[0]
+            if counter % 2 == 0: 
+                
+                while emiss not in unstress_index:
+                    state = np.random.choice(range(L), 1, p=A[states[-1]])[0]
+                    emiss = np.random.choice(range(D), 1, p=O[state])[0]
+                
+                add = len(unstress_dict[inv_map[emiss]])
+                
+                
+            if counter % 2 != 0:
+                
+                while emiss not in stress_index:
+                    state = np.random.choice(range(L), 1, p=A[states[-1]])[0]
+                    emiss = np.random.choice(range(D), 1, p=O[state])[0]
+                
+                add = len(stress_dict[inv_map[emiss]])
+              
+            
+            states.append(state)
+            emission.append(emiss)
+            counter += add
+        
+        return emission, states
+
 
 
     def probability_alphas(self, x):
